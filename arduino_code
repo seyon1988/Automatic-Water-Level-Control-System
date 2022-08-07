@@ -1,0 +1,159 @@
+
+/*
+ * This code is written for the purpose of Assignment 1 - of Digital System Design
+ * MSc in Electronics and Automation - 2020, University of Morotuwa
+ */
+ 
+#include <LCD_I2C.h>
+LCD_I2C lcd(0x27, 16, 2); 
+
+#include <Keypad.h>
+#include <EEPROM.h>
+
+
+#define SENSOR_TOP 10
+#define SENSOR_BOTTOM 11
+
+
+//Both pins are for controlling motot controller
+const int analogPin = A0; //pin for controlling motor speed
+const int directionPin = 13; //pin for controlling direction
+
+boolean forward = true;
+/*
+ * logic implemented in a mannaer that
+ * if forward = true motor will pumb fluid from well to tank
+ * else pumb fill remove fluid from tank to well.
+ * Reason for the logic implemented for both filling fluid and removing fluid
+ * is to give this prductt capabiliy of handling multiple application
+*/
+
+
+//variables to store output of both water 
+//level sensors
+//If water touches the sensor sensor will go high
+//else sensor will go low
+boolean bottomSensor = false;
+boolean topSenosr = false;
+boolean motorRunning = false;
+
+//this variable created for showing multiple views
+int menuType = 0;
+
+//Below code is for defining keypad
+const byte ROWS = 4;
+const byte COLS = 4;
+
+char hexaKeys[ROWS][COLS] = {
+  {'1', '2', '3', 'A'},
+  {'4', '5', '6', 'B'},
+  {'7', '8', '9', 'C'},
+  {'*', '0', '#', 'D'}
+};
+
+
+byte rowPins[ROWS] = {2, 3, 4, 5};
+byte colPins[COLS] = {6, 7, 8, 9};
+
+Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
+
+//function prototype
+void controlMotor(boolean forward, unsigned int speedPercentage);
+
+void setup(){
+  lcd.begin();
+  lcd.backlight();
+  pinMode(SENSOR_BOTTOM, INPUT);
+  pinMode(SENSOR_TOP, INPUT);
+  digitalWrite(SENSOR_BOTTOM, LOW);
+  digitalWrite(SENSOR_TOP, LOW);
+  pinMode(directionPin, OUTPUT);
+  digitalWrite(directionPin, LOW);
+  analogWrite(analogPin, 0);
+  lcd.clear();
+  lcd.setCursor(0, 0); 
+  lcd.print("Automated Motor");
+  lcd.setCursor(0, 1); 
+  lcd.print("Control System");
+  delay(4000);
+  lcd.clear();
+  motorRunning = (boolean)EEPROM.read(0);
+}
+
+void loop(){
+  bottomSensor = digitalRead(SENSOR_BOTTOM);
+  topSenosr      = digitalRead(SENSOR_TOP);
+
+  //lcd.clear();
+  
+  if(topSenosr){
+    lcd.setCursor(0, 1); 
+    lcd.print("T-HIGH ");
+  }else{
+    lcd.setCursor(0, 1); 
+    lcd.print("T-LOW  ");
+  }
+
+  if(bottomSensor){
+    lcd.setCursor(10, 1); 
+    lcd.print("B-HIGH");
+  }else{
+    lcd.setCursor(10, 1); 
+    lcd.print("B-LOW ");
+  }
+  
+  if(bottomSensor==LOW){
+    motorRunning = true;
+    EEPROM.write(0, motorRunning);
+    lcd.setCursor(0, 0); 
+    lcd.print("MOTOR - ON ");
+    controlMotor(true,100);
+  }else{
+    if(topSenosr==HIGH){
+      motorRunning = false;
+      EEPROM.write(0, motorRunning);
+      lcd.setCursor(0, 0); 
+      lcd.print("MOTOR - OFF ");
+      controlMotor(true,0);
+    }else{
+      //Top sensor low
+      //This is created for power interruptions during filling
+      if(motorRunning){
+        lcd.setCursor(0, 0); 
+        lcd.print("MOTOR - ON ");
+        controlMotor(true,100);
+      }else{
+        lcd.setCursor(0, 0); 
+        lcd.print("MOTOR - OFF ");
+        controlMotor(true,0);
+      }
+    }
+  }
+  delay(250);
+  /*
+  char customKey = customKeypad.getKey();
+  if (customKey){
+    lcd.clear();
+    lcd.setCursor(0, 0); 
+    lcd.print(customKey);
+  }
+  */
+}
+
+/*
+  //Both pins are for controlling motot controller
+  const int analogPin = A0; //pin for controlling motor speed
+  const int directionPin = 13; //pin for controlling direction
+ */
+
+void controlMotor(boolean forward, unsigned int speedPercentage){
+  if(forward){
+    digitalWrite(directionPin , HIGH);
+    unsigned int analogValue = ( (100-speedPercentage) / 100 ) * 255;
+    analogWrite(analogPin, analogValue);
+  }else{
+    digitalWrite(directionPin , HIGH);
+    unsigned int analogValue = ( speedPercentage / 100 ) * 255;
+    analogWrite(analogPin, analogValue);
+  }
+}
